@@ -20,6 +20,7 @@ export default function EmailEditor({ onChange, content }: EmailEditorProps) {
     onUpdate: ({ editor }) => {
       onChange(editor.getHTML());
     },
+    immediatelyRender: false,
   });
 
   const addImage = () => {

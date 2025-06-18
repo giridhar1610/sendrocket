@@ -1,4 +1,3 @@
-import { createClient as createClientBase } from "@supabase/supabase-js";
 import { createBrowserClient } from "@supabase/ssr";
 
 export function createClient() {
@@ -11,21 +10,6 @@ export function createClient() {
         autoRefreshToken: true,
         detectSessionInUrl: true,
         persistSession: true,
-      },
-    }
-  );
-}
-
-// For admin operations like sending invites
-export function createAdminClient() {
-  return createClientBase(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      auth: {
-        autoRefreshToken: true,
-        persistSession: false,
-        detectSessionInUrl: false,
       },
     }
   );
