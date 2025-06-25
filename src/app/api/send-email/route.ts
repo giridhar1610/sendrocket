@@ -1,19 +1,14 @@
 import { NextResponse } from "next/server";
 import { resend } from "@/lib/resend";
-import { createClient } from "@/lib/server";
+import { auth } from "@clerk/nextjs/server";
 
 export async function POST(request: Request) {
   try {
-    // Get the Supabase client
-    const supabase = await createClient();
-
-    // Check authentication
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({
+        error: "Unauthorized",
+      }, { status: 401 });
     }
 
     const { emails, subject, content } = await request.json();
@@ -25,7 +20,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Send emails in parallel
     const sendPromises = emails.map(async (email: string) => {
       return resend.sendEmail({
         from: process.env.EMAIL_FROM || "onboarding@resend.dev",

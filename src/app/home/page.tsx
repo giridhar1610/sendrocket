@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import EmailEditor from "@/components/email-editor";
-import { createClient } from "@/lib/supabase/client";
 
 export default function HomePage() {
   const router = useRouter();
@@ -21,14 +20,6 @@ export default function HomePage() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const supabase = createClient();
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        if (!session) {
-          router.replace("/auth/login");
-          return;
-        }
         setIsLoading(false);
       } catch (error) {
         console.error("Auth check error:", error);

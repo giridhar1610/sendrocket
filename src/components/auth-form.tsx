@@ -1,8 +1,8 @@
 "use client";
 
+import { useSignIn, useSignUp } from "@clerk/nextjs";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,18 +19,23 @@ export default function AuthForm({
   ...props
 }: React.ComponentProps<"div">) {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { signIn, isLoaded: signInLoaded } = useSignIn();
+  const { signUp, isLoaded: signUpLoaded, setActive: setSignUpActive } = useSignUp();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showOtpInput, setShowOtpInput] = useState(false);
-  const [otp, setOtp] = useState("");
+  const [pendingVerification, setPendingVerification] = useState(false);
+  const [code, setCode] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [authType, setAuthType] = useState<"sign-in" | "sign-up">("sign-in");
+
+  if (!signInLoaded || !signUpLoaded) return null; // Ensure Clerk is loaded before rendering
 
   const handleAuth = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
     setIsLoading(true);
-
+    
     // Validate email domain
     if (!email.endsWith("@uncalledinnovators.com")) {
       setError("Only @uncalledinnovators.com email addresses are allowed");
@@ -38,85 +43,83 @@ export default function AuthForm({
       return;
     }
 
-    const supabase = createClient();
-
     try {
-      // First try to sign in with password
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
+      // Try sign in first
+      const result = await signIn.create({
+        identifier: email,
         password,
       });
 
-      if (!signInError) {
-        // If sign in successful, redirect to home
+      if (result.status === "complete") {
         router.push("/home");
         return;
+      } else if (result.status === "needs_first_factor") {
+        setPendingVerification(true);
+        setAuthType("sign-in");
+        setError("Please check your email for the verification code");
+        return;
       }
-
-      // If sign in fails, try to sign up
-      const { error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
-
-      if (signUpError) {
-        // If sign up fails, it might be because the user already exists
-        // In that case, send an OTP for verification
-        const { error: otpError } = await supabase.auth.signInWithOtp({
-          email,
-          options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
-          },
-        });
-
-        if (otpError) throw otpError;
-      }
-
-      setShowOtpInput(true);
       setError("Please check your email for the verification code");
-    } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "Something went wrong");
+    } catch (err: any) {
+      // If sign in fails because user doesn't exist, try sign up
+      if (err.errors?.[0]?.code === "form_identifier_not_found") {
+        try {
+          const signUpResult = await signUp.create({
+            emailAddress: email,
+            password,
+          });
+          // Send verification code
+          await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
+          setPendingVerification(true);
+          setAuthType("sign-up");
+          setError("Please check your email for the verification code");
+          return;
+        } catch (signUpErr: any) {
+          setError(signUpErr.errors?.[0]?.message || "Sign up failed");
+        }
+      } else {
+        setError(err.errors?.[0]?.message || (err instanceof Error ? err.message : "Something went wrong"));
+      }
     } finally {
       setIsLoading(false);
+      setCode(""); // Clear the code input after submission
     }
   };
 
-  const handleVerifyOtp = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setError(null);
+  const handleVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
     setIsLoading(true);
-
-    const supabase = createClient();
+    setError(null);
 
     try {
-      // Verify OTP
-      const { error: verifyError } = await supabase.auth.verifyOtp({
-        email,
-        token: otp,
-        type: "email",
-      });
-
-      if (verifyError) throw verifyError;
-
-      // After verification, sign in with password
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (signInError) throw signInError;
-
-      // Redirect to home page
-      router.push("/home");
-    } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "Failed to verify OTP");
+      if (authType === "sign-in") {
+        const result = await signIn.attemptFirstFactor({
+          strategy: "email_code",
+          code
+        });
+        if (result.status === "complete") {
+          router.push("/home");
+        } else {
+          setError("Invalid or expired code.");
+        }
+      } else if (authType === "sign-up") {
+        const verificationResult = await signUp.attemptEmailAddressVerification({
+          code,
+        });
+        if (verificationResult.status === "complete") {
+          await setSignUpActive({ session: verificationResult.createdSessionId });
+          router.push("/home");
+        } else {
+          setError("Invalid or expired code.");
+        }
+      }
+    } catch (err: any) {
+      setError(err.errors?.[0]?.message || (err instanceof Error ? err.message : "Failed to verify code"));
     } finally {
       setIsLoading(false);
+      setCode(""); // Clear the code input after submission
     }
-  };
+  }
 
   return (
     <Card className={className} {...props}>
@@ -127,7 +130,7 @@ export default function AuthForm({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {!showOtpInput ? (
+        {!pendingVerification ? (
           <form onSubmit={handleAuth} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -158,15 +161,15 @@ export default function AuthForm({
             </Button>
           </form>
         ) : (
-          <form onSubmit={handleVerifyOtp} className="space-y-4">
+          <form onSubmit={handleVerify} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="otp">Enter verification code</Label>
               <Input
                 id="otp"
                 type="text"
                 placeholder="Enter the code sent to your email"
-                value={otp}
-                onChange={(e) => setOtp(e.target.value)}
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
                 required
                 disabled={isLoading}
               />
