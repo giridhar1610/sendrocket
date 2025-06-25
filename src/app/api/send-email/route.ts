@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { resend } from "@/lib/resend";
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 
 export async function POST(request: Request) {
   try {
@@ -10,6 +10,9 @@ export async function POST(request: Request) {
         error: "Unauthorized",
       }, { status: 401 });
     }
+
+    const user = await currentUser();
+    const userEmail = user?.emailAddresses[0].emailAddress;
 
     const { emails, subject, content } = await request.json();
 
@@ -22,7 +25,7 @@ export async function POST(request: Request) {
 
     const sendPromises = emails.map(async (email: string) => {
       return resend.sendEmail({
-        from: process.env.EMAIL_FROM || "onboarding@resend.dev",
+        from: userEmail || "contact@uncalledinnovators.com",
         to: email,
         subject,
         html: content,
