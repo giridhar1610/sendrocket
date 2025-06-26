@@ -6,9 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import EmailEditor from "@/components/email-editor";
+import { useAuth } from "@clerk/nextjs";
 
 export default function HomePage() {
   const router = useRouter();
+  const { isSignedIn, isLoaded } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [emails, setEmails] = useState("");
   const [subject, setSubject] = useState("");
@@ -18,17 +20,13 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        setIsLoading(false);
-      } catch (error) {
-        console.error("Auth check error:", error);
-        router.replace("/auth/login");
-      }
-    };
-
-    checkAuth();
-  }, [router]);
+    if (!isLoaded) return;
+    if (!isSignedIn) {
+      router.replace("/auth/login");
+      return;
+    }
+    setIsLoading(false);
+  }, [isLoaded, isSignedIn, router]);
 
   const handleSend = async () => {
     setError(null);
