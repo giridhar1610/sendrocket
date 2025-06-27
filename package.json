@@ -6,8 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "prepare": "husky"
+    "prepare": "husky",
+    "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.22.0",
@@ -43,6 +44,7 @@
     "eslint": "^9",
     "eslint-config-next": "15.2.4",
     "husky": "^9.1.7",
+    "lint-staged": "^16.1.2",
     "tailwindcss": "^4",
     "tw-animate-css": "^1.2.5",
     "typescript": "^5",
