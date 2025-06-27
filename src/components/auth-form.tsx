@@ -1,8 +1,8 @@
 "use client";
 
+import { useSignIn, useSignUp } from "@clerk/nextjs";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,108 +13,122 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import type { HTMLAttributes, FormEvent, ChangeEvent } from "react";
 
-export default function AuthForm({
-  className,
-  ...props
-}: React.ComponentProps<"div">) {
+type AuthFormProps = HTMLAttributes<HTMLDivElement>;
+
+type ClerkAPIError = {
+  errors?: { message: string; code?: string }[];
+};
+
+function extractErrorMessage(err: unknown): string {
+  const clerkError = err as ClerkAPIError;
+  if (clerkError?.errors?.[0]?.message) return clerkError.errors[0].message;
+  if (err instanceof Error) return err.message;
+  return "Something went wrong";
+}
+
+export default function AuthForm({ className, ...props }: AuthFormProps) {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { signIn, isLoaded: signInLoaded } = useSignIn();
+  const {
+    signUp,
+    isLoaded: signUpLoaded,
+    setActive: setSignUpActive,
+  } = useSignUp();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showOtpInput, setShowOtpInput] = useState(false);
-  const [otp, setOtp] = useState("");
+  const [pendingVerification, setPendingVerification] = useState(false);
+  const [code, setCode] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [authType, setAuthType] = useState<"sign-in" | "sign-up">("sign-in");
 
-  const handleAuth = async (event: React.FormEvent<HTMLFormElement>) => {
+  if (!signInLoaded || !signUpLoaded) return null;
+
+  const handleAuth = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
     setIsLoading(true);
 
-    // Validate email domain
-    if (!email.endsWith("@uncalledinnovators.com")) {
+    if (!email.match(/^[^@]+@uncalledinnovators\.com$/)) {
       setError("Only @uncalledinnovators.com email addresses are allowed");
       setIsLoading(false);
       return;
     }
 
-    const supabase = createClient();
-
     try {
-      // First try to sign in with password
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (!signInError) {
-        // If sign in successful, redirect to home
+      const result = await signIn.create({ identifier: email, password });
+      if (result.status === "complete") {
         router.push("/home");
         return;
+      } else if (result.status === "needs_first_factor") {
+        setPendingVerification(true);
+        setAuthType("sign-in");
+        setError("Please check your email for the verification code");
+        return;
       }
-
-      // If sign in fails, try to sign up
-      const { error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
-
-      if (signUpError) {
-        // If sign up fails, it might be because the user already exists
-        // In that case, send an OTP for verification
-        const { error: otpError } = await supabase.auth.signInWithOtp({
-          email,
-          options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
-          },
-        });
-
-        if (otpError) throw otpError;
-      }
-
-      setShowOtpInput(true);
       setError("Please check your email for the verification code");
-    } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "Something went wrong");
+    } catch (err) {
+      if (
+        (err as ClerkAPIError)?.errors?.[0]?.code ===
+        "form_identifier_not_found"
+      ) {
+        try {
+          await signUp.prepareEmailAddressVerification({
+            strategy: "email_code",
+          });
+          setPendingVerification(true);
+          setAuthType("sign-up");
+          setError("Please check your email for the verification code");
+          return;
+        } catch (signUpErr) {
+          setError(extractErrorMessage(signUpErr));
+        }
+      } else {
+        setError(extractErrorMessage(err));
+      }
     } finally {
       setIsLoading(false);
+      setCode("");
     }
   };
 
-  const handleVerifyOtp = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setError(null);
+  const handleVerify = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
     setIsLoading(true);
-
-    const supabase = createClient();
+    setError(null);
 
     try {
-      // Verify OTP
-      const { error: verifyError } = await supabase.auth.verifyOtp({
-        email,
-        token: otp,
-        type: "email",
-      });
-
-      if (verifyError) throw verifyError;
-
-      // After verification, sign in with password
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (signInError) throw signInError;
-
-      // Redirect to home page
-      router.push("/home");
-    } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "Failed to verify OTP");
+      if (authType === "sign-in") {
+        const result = await signIn.attemptFirstFactor({
+          strategy: "email_code",
+          code,
+        });
+        if (result.status === "complete") {
+          router.push("/home");
+        } else {
+          setError("Invalid or expired code.");
+        }
+      } else {
+        const verificationResult = await signUp.attemptEmailAddressVerification(
+          { code },
+        );
+        if (verificationResult.status === "complete") {
+          await setSignUpActive({
+            session: verificationResult.createdSessionId,
+          });
+          router.push("/home");
+        } else {
+          setError("Invalid or expired code.");
+        }
+      }
+    } catch (err) {
+      setError(extractErrorMessage(err));
     } finally {
       setIsLoading(false);
+      setCode("");
     }
   };
 
@@ -127,7 +141,7 @@ export default function AuthForm({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {!showOtpInput ? (
+        {!pendingVerification ? (
           <form onSubmit={handleAuth} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -136,7 +150,9 @@ export default function AuthForm({
                 type="email"
                 placeholder="you@uncalledinnovators.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  setEmail(e.target.value)
+                }
                 required
                 disabled={isLoading}
               />
@@ -147,7 +163,9 @@ export default function AuthForm({
                 id="password"
                 type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  setPassword(e.target.value)
+                }
                 required
                 disabled={isLoading}
               />
@@ -158,15 +176,17 @@ export default function AuthForm({
             </Button>
           </form>
         ) : (
-          <form onSubmit={handleVerifyOtp} className="space-y-4">
+          <form onSubmit={handleVerify} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="otp">Enter verification code</Label>
               <Input
                 id="otp"
                 type="text"
                 placeholder="Enter the code sent to your email"
-                value={otp}
-                onChange={(e) => setOtp(e.target.value)}
+                value={code}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  setCode(e.target.value)
+                }
                 required
                 disabled={isLoading}
               />

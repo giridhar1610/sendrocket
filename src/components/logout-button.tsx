@@ -1,17 +1,19 @@
-'use client'
-
-import { createClient } from '@/lib/supabase/client'
-import { Button } from '@/components/ui/button'
-import { useRouter } from 'next/navigation'
-
-export function LogoutButton() {
-  const router = useRouter()
-
-  const logout = async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    router.push('/auth/login')
-  }
-
-  return <Button onClick={logout}>Logout</Button>
+import { SignOutButton } from "@clerk/nextjs";
+import { Button } from "@/components/ui/button";
+export function LogoutButton({
+  variant = "outline",
+}: {
+  variant?:
+    | "outline"
+    | "destructive"
+    | "link"
+    | "default"
+    | "secondary"
+    | "ghost";
+}) {
+  return (
+    <SignOutButton redirectUrl="/auth/login">
+      <Button variant={variant}>Sign Out</Button>
+    </SignOutButton>
+  );
 }
