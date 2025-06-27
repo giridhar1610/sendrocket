@@ -1,5 +1,19 @@
 import { SignOutButton } from "@clerk/nextjs";
-
-export function LogoutButton() {
-  return <SignOutButton />;
+import { Button } from "@/components/ui/button";
+export function LogoutButton({
+  variant = "outline",
+}: {
+  variant?:
+    | "outline"
+    | "destructive"
+    | "link"
+    | "default"
+    | "secondary"
+    | "ghost";
+}) {
+  return (
+    <SignOutButton redirectUrl="/auth/login">
+      <Button variant={variant}>Sign Out</Button>
+    </SignOutButton>
+  );
 }
