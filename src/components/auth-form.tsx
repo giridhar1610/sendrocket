@@ -13,11 +13,22 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import type { HTMLAttributes, FormEvent, ChangeEvent } from "react";
 
-export default function AuthForm({
-  className,
-  ...props
-}: React.ComponentProps<"div">) {
+type AuthFormProps = HTMLAttributes<HTMLDivElement>;
+
+type ClerkAPIError = {
+  errors?: { message: string; code?: string }[];
+};
+
+function extractErrorMessage(err: unknown): string {
+  const clerkError = err as ClerkAPIError;
+  if (clerkError?.errors?.[0]?.message) return clerkError.errors[0].message;
+  if (err instanceof Error) return err.message;
+  return "Something went wrong";
+}
+
+export default function AuthForm({ className, ...props }: AuthFormProps) {
   const router = useRouter();
   const { signIn, isLoaded: signInLoaded } = useSignIn();
   const {
@@ -25,6 +36,7 @@ export default function AuthForm({
     isLoaded: signUpLoaded,
     setActive: setSignUpActive,
   } = useSignUp();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pendingVerification, setPendingVerification] = useState(false);
@@ -33,31 +45,22 @@ export default function AuthForm({
   const [isLoading, setIsLoading] = useState(false);
   const [authType, setAuthType] = useState<"sign-in" | "sign-up">("sign-in");
 
-  if (!signInLoaded || !signUpLoaded) return null; // Ensure Clerk is loaded before rendering
+  if (!signInLoaded || !signUpLoaded) return null;
 
-  const handleAuth = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleAuth = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
     setIsLoading(true);
 
-    // Validate email domain
-    if (!email.endsWith("@uncalledinnovators.com")) {
+    if (!email.match(/^[^@]+@uncalledinnovators\.com$/)) {
       setError("Only @uncalledinnovators.com email addresses are allowed");
       setIsLoading(false);
       return;
     }
 
     try {
-      // Try sign in first
-      const result = await signIn.create({
-        identifier: email,
-        password,
-      });
-
-      console.log("Sign-in result:", result);
-
+      const result = await signIn.create({ identifier: email, password });
       if (result.status === "complete") {
-        console.log("Successfully signed in, redirecting to /home");
         router.push("/home");
         return;
       } else if (result.status === "needs_first_factor") {
@@ -67,16 +70,12 @@ export default function AuthForm({
         return;
       }
       setError("Please check your email for the verification code");
-    } catch (err: any) {
-      // If sign in fails because user doesn't exist, try sign up
-      if (err.errors?.[0]?.code === "form_identifier_not_found") {
+    } catch (err) {
+      if (
+        (err as ClerkAPIError)?.errors?.[0]?.code ===
+        "form_identifier_not_found"
+      ) {
         try {
-          const signUpResult = await signUp.create({
-            emailAddress: email,
-            password,
-          });
-          console.log("Sign-up result:", signUpResult);
-          // Send verification code
           await signUp.prepareEmailAddressVerification({
             strategy: "email_code",
           });
@@ -84,22 +83,19 @@ export default function AuthForm({
           setAuthType("sign-up");
           setError("Please check your email for the verification code");
           return;
-        } catch (signUpErr: any) {
-          setError(signUpErr.errors?.[0]?.message || "Sign up failed");
+        } catch (signUpErr) {
+          setError(extractErrorMessage(signUpErr));
         }
       } else {
-        setError(
-          err.errors?.[0]?.message ||
-            (err instanceof Error ? err.message : "Something went wrong"),
-        );
+        setError(extractErrorMessage(err));
       }
     } finally {
       setIsLoading(false);
-      setCode(""); // Clear the code input after submission
+      setCode("");
     }
   };
 
-  const handleVerify = async (e: React.FormEvent) => {
+  const handleVerify = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
@@ -110,24 +106,16 @@ export default function AuthForm({
           strategy: "email_code",
           code,
         });
-        console.log("Sign-in (code) result:", result);
         if (result.status === "complete") {
-          console.log("Successfully signed in with code, redirecting to /home");
           router.push("/home");
         } else {
           setError("Invalid or expired code.");
         }
-      } else if (authType === "sign-up") {
+      } else {
         const verificationResult = await signUp.attemptEmailAddressVerification(
-          {
-            code,
-          },
+          { code },
         );
-        console.log("Sign-up (verification) result:", verificationResult);
         if (verificationResult.status === "complete") {
-          console.log(
-            "Successfully signed up and verified, redirecting to /home",
-          );
           await setSignUpActive({
             session: verificationResult.createdSessionId,
           });
@@ -136,14 +124,11 @@ export default function AuthForm({
           setError("Invalid or expired code.");
         }
       }
-    } catch (err: any) {
-      setError(
-        err.errors?.[0]?.message ||
-          (err instanceof Error ? err.message : "Failed to verify code"),
-      );
+    } catch (err) {
+      setError(extractErrorMessage(err));
     } finally {
       setIsLoading(false);
-      setCode(""); // Clear the code input after submission
+      setCode("");
     }
   };
 
@@ -165,7 +150,9 @@ export default function AuthForm({
                 type="email"
                 placeholder="you@uncalledinnovators.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  setEmail(e.target.value)
+                }
                 required
                 disabled={isLoading}
               />
@@ -176,7 +163,9 @@ export default function AuthForm({
                 id="password"
                 type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  setPassword(e.target.value)
+                }
                 required
                 disabled={isLoading}
               />
@@ -195,7 +184,9 @@ export default function AuthForm({
                 type="text"
                 placeholder="Enter the code sent to your email"
                 value={code}
-                onChange={(e) => setCode(e.target.value)}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  setCode(e.target.value)
+                }
                 required
                 disabled={isLoading}
               />

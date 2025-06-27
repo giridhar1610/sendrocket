@@ -1,6 +1,5 @@
 import { SignOutButton } from "@clerk/nextjs";
-import { Button, buttonVariants } from "@/components/ui/button";
-
+import { Button } from "@/components/ui/button";
 export function LogoutButton({
   variant = "outline",
 }: {

@@ -1,6 +1,3 @@
-#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
-
 # --- Type Checking (runs on entire project) ---
 echo "Running TypeScript type check..."
 pnpm tsc --noEmit || { echo "TypeScript type check failed. Aborting commit."; exit 1; }
@@ -16,14 +13,7 @@ if [ -n "$STAGED_FILES" ]; then # Check if there are any staged files
 else
   echo "No staged files to format with Prettier."
 fi
-echo "Running ESLint on staged files..."
-# Filter only JS/TS files for ESLint
-LINT_FILES=$(echo "$STAGED_FILES" | grep -E '\.(js|jsx|ts|tsx)$')
-if [ -n "$LINT_FILES" ]; then
-  pnpm eslint $LINT_FILES || { echo "ESLint failed. Aborting commit."; exit 1; }
-else
-  echo "No JS/TS staged files to lint with ESLint."
-fi
-
+echo "Running ESLint on src directory..."
+pnpm eslint src || { echo "ESLint failed. Aborting commit."; exit 1; }
 
 echo "Pre-commit checks passed!"
