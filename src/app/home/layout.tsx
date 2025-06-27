@@ -5,9 +5,5 @@ export default async function HomeLayout({
 }: {
   children: ReactNode;
 }) {
-  // const { userId } = await auth();
-  // if (!userId) {
-  //   redirect("/auth/login");
-  // }
   return <>{children}</>;
 }

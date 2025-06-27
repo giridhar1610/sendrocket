@@ -16,5 +16,12 @@ if [ -n "$STAGED_FILES" ]; then # Check if there are any staged files
 else
   echo "No staged files to format with Prettier."
 fi
+echo "Running ESLint on staged files..."
+if [ -n "$STAGED_FILES" ]; then
+  pnpm eslint $STAGED_FILES || { echo "ESLint failed. Aborting commit."; exit 1; }
+else
+  echo "No staged files to lint with ESLint."
+fi
+
 
 echo "Pre-commit checks passed!"
