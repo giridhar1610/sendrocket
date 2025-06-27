@@ -17,10 +17,12 @@ else
   echo "No staged files to format with Prettier."
 fi
 echo "Running ESLint on staged files..."
-if [ -n "$STAGED_FILES" ]; then
-  pnpm eslint $STAGED_FILES || { echo "ESLint failed. Aborting commit."; exit 1; }
+# Filter only JS/TS files for ESLint
+LINT_FILES=$(echo "$STAGED_FILES" | grep -E '\.(js|jsx|ts|tsx)$')
+if [ -n "$LINT_FILES" ]; then
+  pnpm eslint $LINT_FILES || { echo "ESLint failed. Aborting commit."; exit 1; }
 else
-  echo "No staged files to lint with ESLint."
+  echo "No JS/TS staged files to lint with ESLint."
 fi
 
 
