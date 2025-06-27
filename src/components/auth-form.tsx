@@ -20,7 +20,11 @@ export default function AuthForm({
 }: React.ComponentProps<"div">) {
   const router = useRouter();
   const { signIn, isLoaded: signInLoaded } = useSignIn();
-  const { signUp, isLoaded: signUpLoaded, setActive: setSignUpActive } = useSignUp();
+  const {
+    signUp,
+    isLoaded: signUpLoaded,
+    setActive: setSignUpActive,
+  } = useSignUp();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pendingVerification, setPendingVerification] = useState(false);
@@ -35,7 +39,7 @@ export default function AuthForm({
     event.preventDefault();
     setError(null);
     setIsLoading(true);
-    
+
     // Validate email domain
     if (!email.endsWith("@uncalledinnovators.com")) {
       setError("Only @uncalledinnovators.com email addresses are allowed");
@@ -50,7 +54,10 @@ export default function AuthForm({
         password,
       });
 
+      console.log("Sign-in result:", result);
+
       if (result.status === "complete") {
+        console.log("Successfully signed in, redirecting to /home");
         router.push("/home");
         return;
       } else if (result.status === "needs_first_factor") {
@@ -68,8 +75,11 @@ export default function AuthForm({
             emailAddress: email,
             password,
           });
+          console.log("Sign-up result:", signUpResult);
           // Send verification code
-          await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
+          await signUp.prepareEmailAddressVerification({
+            strategy: "email_code",
+          });
           setPendingVerification(true);
           setAuthType("sign-up");
           setError("Please check your email for the verification code");
@@ -78,7 +88,10 @@ export default function AuthForm({
           setError(signUpErr.errors?.[0]?.message || "Sign up failed");
         }
       } else {
-        setError(err.errors?.[0]?.message || (err instanceof Error ? err.message : "Something went wrong"));
+        setError(
+          err.errors?.[0]?.message ||
+            (err instanceof Error ? err.message : "Something went wrong"),
+        );
       }
     } finally {
       setIsLoading(false);
@@ -95,31 +108,44 @@ export default function AuthForm({
       if (authType === "sign-in") {
         const result = await signIn.attemptFirstFactor({
           strategy: "email_code",
-          code
+          code,
         });
+        console.log("Sign-in (code) result:", result);
         if (result.status === "complete") {
+          console.log("Successfully signed in with code, redirecting to /home");
           router.push("/home");
         } else {
           setError("Invalid or expired code.");
         }
       } else if (authType === "sign-up") {
-        const verificationResult = await signUp.attemptEmailAddressVerification({
-          code,
-        });
+        const verificationResult = await signUp.attemptEmailAddressVerification(
+          {
+            code,
+          },
+        );
+        console.log("Sign-up (verification) result:", verificationResult);
         if (verificationResult.status === "complete") {
-          await setSignUpActive({ session: verificationResult.createdSessionId });
+          console.log(
+            "Successfully signed up and verified, redirecting to /home",
+          );
+          await setSignUpActive({
+            session: verificationResult.createdSessionId,
+          });
           router.push("/home");
         } else {
           setError("Invalid or expired code.");
         }
       }
     } catch (err: any) {
-      setError(err.errors?.[0]?.message || (err instanceof Error ? err.message : "Failed to verify code"));
+      setError(
+        err.errors?.[0]?.message ||
+          (err instanceof Error ? err.message : "Failed to verify code"),
+      );
     } finally {
       setIsLoading(false);
       setCode(""); // Clear the code input after submission
     }
-  }
+  };
 
   return (
     <Card className={className} {...props}>

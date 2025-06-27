@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import EmailForm from "./components/email-form";
+import { LogoutButton } from "@/components/logout-button";
 
 export default function HomePage() {
   const router = useRouter();

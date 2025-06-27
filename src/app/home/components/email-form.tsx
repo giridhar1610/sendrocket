@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import EmailEditor from "@/components/email-editor";
 import { useEmailSender } from "../hooks/use-email-sender";
+import { LogoutButton } from "@/components/logout-button";
 
 export default function EmailForm() {
   const [emails, setEmails] = useState("");
@@ -73,16 +74,21 @@ export default function EmailForm() {
 
       {error && <p className="text-red-500 text-sm">{error}</p>}
 
-      <div className="flex gap-4">
-        <Button variant="outline" onClick={() => setIsPreview(!isPreview)}>
-          {isPreview ? "Edit" : "Preview"}
-        </Button>
-        <Button
-          onClick={handleSend}
-          disabled={isSending || !emails || !subject || !content}
-        >
-          {isSending ? "Sending..." : "Send Emails"}
-        </Button>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex gap-4">
+          <Button variant="outline" onClick={() => setIsPreview(!isPreview)}>
+            {isPreview ? "Edit" : "Preview"}
+          </Button>
+          <Button
+            onClick={handleSend}
+            disabled={isSending || !emails || !subject || !content}
+          >
+            {isSending ? "Sending..." : "Send Emails"}
+          </Button>
+        </div>
+        <div className="ml-auto">
+          <LogoutButton variant="destructive" />
+        </div>
       </div>
     </div>
   );
